@@ -4,7 +4,8 @@ import { ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { DeleteBreakButton } from "@/components/breaks/delete-break-button";
-import { TeamBadge } from "@/components/breaks/team-badge";
+import { SpotRow } from "@/components/breaks/spot-row";
+import { BreakStatusChanger, BulkActionsToolbar } from "@/components/breaks/break-toolbar";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { SPORT_LABELS, type SportKey } from "@/lib/constants";
 
@@ -24,7 +25,7 @@ type BreakRow = {
   notes: string | null;
 };
 
-type SpotRow = {
+type SpotRowData = {
   id: string;
   spot_number: number;
   customer_id: string | null;
@@ -34,17 +35,26 @@ type SpotRow = {
   fees_cost: number;
   payment_received: boolean;
   shipped: boolean;
+  tracking_number: string | null;
+  notes: string | null;
+};
+
+type Team = {
+  id: string;
+  name: string;
+  abbreviation: string | null;
+  primary_color: string | null;
+  text_color: string | null;
 };
 
 type SpotTeamRow = {
   break_spot_id: string;
-  teams: {
-    id: string;
-    name: string;
-    abbreviation: string | null;
-    primary_color: string | null;
-    text_color: string | null;
-  };
+  teams: Team | Team[];
+};
+
+type CustomerRow = {
+  id: string;
+  display_name: string;
 };
 
 type PnlRow = {
@@ -53,20 +63,6 @@ type PnlRow = {
   net_profit: number;
   sold_spots: number;
   total_spots: number;
-};
-
-const STATUS_LABELS = {
-  planned: "Planned",
-  in_progress: "In progress",
-  completed: "Completed",
-  canceled: "Canceled",
-};
-
-const STATUS_CLASSES = {
-  planned: "bg-cream-100 text-ink-muted",
-  in_progress: "bg-navy-100 text-navy-900",
-  completed: "bg-green-50 text-green-900",
-  canceled: "bg-red-50 text-red-700",
 };
 
 const FORMAT_LABELS = {
@@ -96,13 +92,13 @@ export default async function BreakDetailPage({
   const { data: spots } = await supabase
     .from("break_spots")
     .select(
-      "id, spot_number, customer_id, price, shipping_cost, supplies_cost, fees_cost, payment_received, shipped"
+      "id, spot_number, customer_id, price, shipping_cost, supplies_cost, fees_cost, payment_received, shipped, tracking_number, notes"
     )
     .eq("break_id", params.id)
     .order("spot_number");
-  const spotList = (spots as SpotRow[] | null) || [];
+  const spotList = (spots as SpotRowData[] | null) || [];
 
-  // Get team names for each spot
+  // Get team mappings for each spot
   const spotIds = spotList.map((s) => s.id);
   let spotTeams: SpotTeamRow[] = [];
   if (spotIds.length > 0) {
@@ -114,16 +110,7 @@ export default async function BreakDetailPage({
   }
 
   // Group teams by spot
-  const teamsBySpot = new Map<
-    string,
-    {
-      id: string;
-      name: string;
-      abbreviation: string | null;
-      primary_color: string | null;
-      text_color: string | null;
-    }[]
-  >();
+  const teamsBySpot = new Map<string, Team[]>();
   for (const st of spotTeams) {
     const team = Array.isArray(st.teams) ? st.teams[0] : st.teams;
     if (!team) continue;
@@ -131,6 +118,22 @@ export default async function BreakDetailPage({
       teamsBySpot.set(st.break_spot_id, []);
     }
     teamsBySpot.get(st.break_spot_id)!.push(team);
+  }
+
+  // Get customer names for assigned spots
+  const customerIds = spotList
+    .map((s) => s.customer_id)
+    .filter((id): id is string => !!id);
+  const uniqueCustomerIds = Array.from(new Set(customerIds));
+  let customerNamesById = new Map<string, string>();
+  if (uniqueCustomerIds.length > 0) {
+    const { data: customers } = await supabase
+      .from("customers")
+      .select("id, display_name")
+      .in("id", uniqueCustomerIds);
+    for (const c of (customers as CustomerRow[] | null) || []) {
+      customerNamesById.set(c.id, c.display_name);
+    }
   }
 
   // Pull P&L
@@ -142,6 +145,7 @@ export default async function BreakDetailPage({
 
   const breakEvenRemaining =
     breakRow.total_product_cost - (pnl?.total_revenue || 0);
+  const hasSoldSpots = (pnl?.sold_spots || 0) > 0;
 
   return (
     <div className="container-app py-10 max-w-4xl">
@@ -153,22 +157,12 @@ export default async function BreakDetailPage({
         Back to breaks
       </Link>
 
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-3xl text-navy-900">
-              {breakRow.product_year ? `${breakRow.product_year} ` : ""}
-              {breakRow.product_name}
-            </h1>
-            <span
-              className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-                STATUS_CLASSES[breakRow.status]
-              )}
-            >
-              {STATUS_LABELS[breakRow.status]}
-            </span>
-          </div>
+          <h1 className="text-3xl text-navy-900 mb-1">
+            {breakRow.product_year ? `${breakRow.product_year} ` : ""}
+            {breakRow.product_name}
+          </h1>
           <p className="text-sm text-ink-muted">
             {SPORT_LABELS[breakRow.sport]}
             {breakRow.league ? ` · ${breakRow.league}` : ""} ·{" "}
@@ -176,7 +170,8 @@ export default async function BreakDetailPage({
             {breakRow.break_date && ` · ${formatDate(breakRow.break_date)}`}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <BreakStatusChanger breakId={breakRow.id} currentStatus={breakRow.status} />
           <DeleteBreakButton breakId={breakRow.id} />
         </div>
       </div>
@@ -248,67 +243,42 @@ export default async function BreakDetailPage({
       {/* Spots */}
       <Card className="mb-6">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
             <h2 className="font-serif text-xl text-navy-900">
               Spots ({spotList.length})
             </h2>
-            <p className="text-sm text-ink-muted">
-              Spot management coming soon
-            </p>
+            <BulkActionsToolbar
+              breakId={breakRow.id}
+              hasSoldSpots={hasSoldSpots}
+            />
           </div>
           {spotList.length === 0 ? (
             <p className="text-sm text-ink-muted">No spots in this break.</p>
           ) : (
             <div className="space-y-2">
-              {spotList.map((spot) => {
-                const teams = teamsBySpot.get(spot.id) || [];
-                return (
-                  <div
-                    key={spot.id}
-                    className="flex items-center gap-3 p-3 rounded-md border border-cream-200 hover:bg-cream-50 transition-colors"
-                  >
-                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-navy-900 text-cream-50 text-xs font-medium flex-shrink-0">
-                      {spot.spot_number}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      {teams.length === 0 ? (
-                        <p className="text-sm text-ink-subtle italic">
-                          No teams
-                        </p>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {teams.map((t) => (
-                            <TeamBadge key={t.id} team={t} variant="abbr" />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      {spot.customer_id ? (
-                        <>
-                          <p className="text-sm text-navy-900 font-medium tabular-nums">
-                            {formatCurrency(spot.price)}
-                          </p>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {spot.payment_received && (
-                              <span className="text-xs text-green-700">
-                                Paid
-                              </span>
-                            )}
-                            {spot.shipped && (
-                              <span className="text-xs text-navy-700">
-                                Shipped
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-xs text-ink-subtle">Unsold</p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {spotList.map((spot) => (
+                <SpotRow
+                  key={spot.id}
+                  breakId={breakRow.id}
+                  spot={{
+                    id: spot.id,
+                    spot_number: spot.spot_number,
+                    customer_id: spot.customer_id,
+                    customer_name: spot.customer_id
+                      ? customerNamesById.get(spot.customer_id) || null
+                      : null,
+                    price: spot.price,
+                    shipping_cost: spot.shipping_cost,
+                    supplies_cost: spot.supplies_cost,
+                    fees_cost: spot.fees_cost,
+                    payment_received: spot.payment_received,
+                    shipped: spot.shipped,
+                    tracking_number: spot.tracking_number,
+                    notes: spot.notes,
+                    teams: teamsBySpot.get(spot.id) || [],
+                  }}
+                />
+              ))}
             </div>
           )}
         </CardContent>

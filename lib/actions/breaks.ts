@@ -221,26 +221,3 @@ export async function deleteBreak(breakId: string): Promise<ActionResult> {
   revalidatePath("/breaks");
   redirect("/breaks");
 }
-
-// ============================================================
-// UPDATE STATUS
-// ============================================================
-export async function updateBreakStatus(
-  breakId: string,
-  status: "planned" | "in_progress" | "completed" | "canceled"
-): Promise<ActionResult> {
-  const { supabase } = await requireOrgId();
-
-  const { error } = await supabase
-    .from("breaks")
-    .update({ status })
-    .eq("id", breakId);
-
-  if (error) {
-    return { ok: false, message: error.message };
-  }
-
-  revalidatePath(`/breaks/${breakId}`);
-  revalidatePath("/breaks");
-  return { ok: true };
-}
