@@ -26,6 +26,8 @@ type Team = {
   league: string;
   name: string;
   abbreviation: string | null;
+  primary_color: string | null;
+  text_color: string | null;
 };
 
 type Spot = {
@@ -334,7 +336,7 @@ export function BreakForm({ teams }: { teams: Team[] }) {
                 : `${availableTeams.length} ${league} teams available. Auto-generate spots or add them manually.`}
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               type="button"
               variant="secondary"
@@ -352,6 +354,16 @@ export function BreakForm({ teams }: { teams: Team[] }) {
               <Plus className="h-4 w-4" />
               Add empty spot
             </Button>
+            {spots.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setSpots([])}
+              >
+                Clear all
+              </Button>
+            )}
           </div>
         </div>
 
@@ -409,18 +421,26 @@ export function BreakForm({ teams }: { teams: Team[] }) {
                     {spot.teamIds.map((teamId, idx) => {
                       const team = teamById.get(teamId);
                       if (!team) return null;
+                      const bg = team.primary_color || "#1a2540";
+                      const fg = team.text_color || "#FFFFFF";
                       return (
                         <span
                           key={teamId}
-                          className="inline-flex items-center gap-1 bg-cream-100 border border-cream-200 rounded-full pl-3 pr-1 py-1 text-xs"
+                          className="inline-flex items-center gap-1.5 rounded-full pl-1 pr-1 py-0.5 text-xs font-medium"
+                          style={{ backgroundColor: bg, color: fg }}
                         >
-                          {team.name}
+                          <span
+                            className="inline-flex items-center justify-center h-5 min-w-[2rem] px-1.5 rounded-full text-[10px] font-bold bg-black/20"
+                          >
+                            {team.abbreviation || team.name.slice(0, 3).toUpperCase()}
+                          </span>
+                          <span className="pr-1">{team.name}</span>
                           <button
                             type="button"
                             onClick={() =>
                               removeTeamFromSpot(teamId, spot.number)
                             }
-                            className="ml-0.5 h-4 w-4 rounded-full flex items-center justify-center hover:bg-cream-200 transition-colors"
+                            className="h-4 w-4 rounded-full flex items-center justify-center hover:bg-black/20 transition-colors"
                             aria-label={`Remove ${team.name}`}
                           >
                             <X className="h-3 w-3" />
@@ -512,6 +532,14 @@ function TeamChip({
   onAssign: (spotNumber: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const bg = team.primary_color || "#1a2540";
+  const fg = team.text_color || "#FFFFFF";
+  const abbr = team.abbreviation || team.name.slice(0, 3).toUpperCase();
+
+  const baseChipClass =
+    "inline-flex items-center gap-1.5 bg-white border rounded-full pl-1 pr-3 py-0.5 text-xs transition-colors";
+  const abbrBadgeClass =
+    "inline-flex items-center justify-center h-5 min-w-[2rem] px-1.5 rounded-full text-[10px] font-bold";
 
   // If only one spot, just assign directly on click
   if (spots.length === 1) {
@@ -519,10 +547,19 @@ function TeamChip({
       <button
         type="button"
         onClick={() => onAssign(spots[0].number)}
-        className="inline-flex items-center gap-1 bg-white border border-cream-200 hover:border-navy-300 hover:bg-cream-50 rounded-full px-3 py-1 text-xs transition-colors"
+        className={cn(
+          baseChipClass,
+          "border-cream-200 hover:border-navy-300 hover:bg-cream-50"
+        )}
       >
-        <Plus className="h-3 w-3" />
+        <span
+          className={abbrBadgeClass}
+          style={{ backgroundColor: bg, color: fg }}
+        >
+          {abbr}
+        </span>
         {team.name}
+        <Plus className="h-3 w-3 text-ink-subtle" />
       </button>
     );
   }
@@ -534,17 +571,23 @@ function TeamChip({
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
-          "inline-flex items-center gap-1 bg-white border rounded-full px-3 py-1 text-xs transition-colors",
+          baseChipClass,
           open
             ? "border-navy-700"
             : "border-cream-200 hover:border-navy-300 hover:bg-cream-50"
         )}
       >
-        <Plus className="h-3 w-3" />
+        <span
+          className={abbrBadgeClass}
+          style={{ backgroundColor: bg, color: fg }}
+        >
+          {abbr}
+        </span>
         {team.name}
+        <Plus className="h-3 w-3 text-ink-subtle" />
       </button>
       {open && (
-        <div className="absolute z-10 mt-1 left-0 bg-white border border-cream-200 rounded-md shadow-card-hover py-1 min-w-[120px]">
+        <div className="absolute z-10 mt-1 left-0 bg-white border border-cream-200 rounded-md shadow-card-hover py-1 min-w-[140px]">
           {spots.map((spot) => (
             <button
               key={spot.number}

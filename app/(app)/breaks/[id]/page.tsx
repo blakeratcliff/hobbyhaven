@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { DeleteBreakButton } from "@/components/breaks/delete-break-button";
+import { TeamBadge } from "@/components/breaks/team-badge";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { SPORT_LABELS, type SportKey } from "@/lib/constants";
 
@@ -41,6 +42,8 @@ type SpotTeamRow = {
     id: string;
     name: string;
     abbreviation: string | null;
+    primary_color: string | null;
+    text_color: string | null;
   };
 };
 
@@ -105,13 +108,22 @@ export default async function BreakDetailPage({
   if (spotIds.length > 0) {
     const { data } = await supabase
       .from("break_spot_teams")
-      .select("break_spot_id, teams(id, name, abbreviation)")
+      .select("break_spot_id, teams(id, name, abbreviation, primary_color, text_color)")
       .in("break_spot_id", spotIds);
     spotTeams = (data as SpotTeamRow[] | null) || [];
   }
 
   // Group teams by spot
-  const teamsBySpot = new Map<string, { id: string; name: string; abbreviation: string | null }[]>();
+  const teamsBySpot = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      abbreviation: string | null;
+      primary_color: string | null;
+      text_color: string | null;
+    }[]
+  >();
   for (const st of spotTeams) {
     const team = Array.isArray(st.teams) ? st.teams[0] : st.teams;
     if (!team) continue;
@@ -259,11 +271,17 @@ export default async function BreakDetailPage({
                       {spot.spot_number}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-navy-900 truncate">
-                        {teams.length === 0
-                          ? "(No teams)"
-                          : teams.map((t) => t.name).join(", ")}
-                      </p>
+                      {teams.length === 0 ? (
+                        <p className="text-sm text-ink-subtle italic">
+                          No teams
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {teams.map((t) => (
+                            <TeamBadge key={t.id} team={t} variant="abbr" />
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       {spot.customer_id ? (

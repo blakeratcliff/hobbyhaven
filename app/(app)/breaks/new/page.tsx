@@ -10,6 +10,8 @@ type Team = {
   league: string;
   name: string;
   abbreviation: string | null;
+  primary_color: string | null;
+  text_color: string | null;
 };
 
 export default async function NewBreakPage() {
@@ -18,7 +20,7 @@ export default async function NewBreakPage() {
   // Pull all teams once. ~250 rows, sub-1KB transfer.
   const { data: teams } = await supabase
     .from("teams")
-    .select("id, sport, league, name, abbreviation")
+    .select("id, sport, league, name, abbreviation, primary_color, text_color")
     .order("name");
 
   return (
