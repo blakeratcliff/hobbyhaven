@@ -124,6 +124,12 @@ export default function OnboardingPage() {
     );
   }
 
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -193,6 +199,17 @@ export default function OnboardingPage() {
           <Button type="submit" className="w-full" loading={loading}>
             Create my Break Room
           </Button>
+
+          <p className="text-center text-sm text-ink-subtle">
+            Already have an account?{" "}
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="text-navy-700 hover:underline"
+            >
+              Sign out
+            </button>
+          </p>
         </form>
       </CardContent>
     </Card>
