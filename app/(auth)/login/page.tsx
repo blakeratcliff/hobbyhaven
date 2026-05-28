@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +34,6 @@ export default function LoginPage() {
 }
 
 function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") || "/dashboard";
 
@@ -60,24 +59,10 @@ function LoginForm() {
       return;
     }
 
-    // Check if the user has completed onboarding (has a profile).
-    const { data: userData } = await supabase.auth.getUser();
-    if (userData.user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("id", userData.user.id)
-        .maybeSingle<{ id: string }>();
-
-      if (!profile) {
-        router.push("/onboarding");
-        router.refresh();
-        return;
-      }
-    }
-
-    router.push(next);
-    router.refresh();
+    // Hard navigation: fully reload so the auth cookie is sent on the next
+    // request and the protected layout can render with the correct session.
+    // The layout itself handles "no profile yet -> /onboarding".
+    window.location.href = next;
   }
 
   return (

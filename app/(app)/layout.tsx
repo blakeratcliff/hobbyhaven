@@ -18,11 +18,21 @@ export default async function AppLayout({
   }
 
   // Pull the org for the header. If they don't have a profile yet, send to onboarding.
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, org_id")
-    .eq("id", user.id)
-    .maybeSingle<{ display_name: string | null; org_id: string }>();
+  // Retry once on null because there can be a brief window right after signup
+  // where the auth context hasn't fully propagated to the RLS evaluator.
+  let profile: { display_name: string | null; org_id: string } | null = null;
+  for (let i = 0; i < 2; i++) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name, org_id")
+      .eq("id", user.id)
+      .maybeSingle<{ display_name: string | null; org_id: string }>();
+    if (data) {
+      profile = data;
+      break;
+    }
+    if (i === 0) await new Promise((r) => setTimeout(r, 200));
+  }
 
   if (!profile) {
     redirect("/onboarding");
