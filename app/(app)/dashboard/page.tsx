@@ -19,15 +19,15 @@ export default async function DashboardPage() {
     .eq("id", user!.id)
     .maybeSingle();
 
-  const { data: org } = profile
-    ? await supabase
-        .from("organizations")
-        .select("name")
-        .eq("id", profile.org_id)
-        .maybeSingle()
-    : { data: null };
-
-  const orgName = org?.name;
+  let orgName: string | undefined;
+  if (profile) {
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", profile.org_id)
+      .maybeSingle();
+    orgName = org?.name;
+  }
 
   return (
     <div className="container-app py-10">
