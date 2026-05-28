@@ -41,10 +41,9 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute = PUBLIC_ROUTES.some((route) =>
     route === "/" ? pathname === "/" : pathname.startsWith(route)
   );
-  const isOnboarding = pathname.startsWith("/onboarding");
 
   // Not signed in + trying to access protected route → redirect to login
-  if (!user && !isPublicRoute && !isOnboarding) {
+  if (!user && !isPublicRoute) {
     url.pathname = "/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
