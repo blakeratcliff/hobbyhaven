@@ -20,7 +20,7 @@ export default async function AppLayout({
   // Pull the org for the header. If they don't have a profile yet, send to onboarding.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, org_id, organizations(name, slug)")
+    .select("display_name, org_id")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -28,13 +28,11 @@ export default async function AppLayout({
     redirect("/onboarding");
   }
 
-  const org = profile.organizations as
-    | { name: string; slug: string }
-    | { name: string; slug: string }[]
-    | null;
-
-  // Handle the array vs object shape from the join.
-  const orgRecord = Array.isArray(org) ? org[0] : org;
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("name, slug")
+    .eq("id", profile.org_id)
+    .maybeSingle();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -74,7 +72,7 @@ export default async function AppLayout({
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden sm:block text-sm text-ink-muted">
-              {orgRecord?.name}
+              {org?.name}
             </span>
             <LogoutButton />
           </div>

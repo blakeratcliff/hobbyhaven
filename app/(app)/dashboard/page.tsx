@@ -15,16 +15,19 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("display_name, organizations(name)")
+    .select("display_name, org_id")
     .eq("id", user!.id)
     .maybeSingle();
 
-  const orgRecord = profile?.organizations as
-    | { name: string }
-    | { name: string }[]
-    | null
-    | undefined;
-  const orgName = Array.isArray(orgRecord) ? orgRecord[0]?.name : orgRecord?.name;
+  const { data: org } = profile
+    ? await supabase
+        .from("organizations")
+        .select("name")
+        .eq("id", profile.org_id)
+        .maybeSingle()
+    : { data: null };
+
+  const orgName = org?.name;
 
   return (
     <div className="container-app py-10">
