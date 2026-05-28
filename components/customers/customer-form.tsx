@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
+import { useFormState, useFormStatus } from "react-dom";
 import Link from "next/link";
 import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -43,7 +44,7 @@ export function CustomerForm({
   submitLabel,
   cancelHref,
 }: Props) {
-  const [state, formAction, pending] = useActionState<ActionResult, FormData>(
+  const [state, formAction] = useFormState<ActionResult, FormData>(
     action,
     { ok: true }
   );
@@ -155,9 +156,7 @@ export function CustomerForm({
       </div>
 
       <div className="flex items-center gap-3">
-        <Button type="submit" loading={pending}>
-          {submitLabel}
-        </Button>
+        <SubmitButton label={submitLabel} />
         <Link href={cancelHref}>
           <Button type="button" variant="ghost">
             Cancel
@@ -165,5 +164,14 @@ export function CustomerForm({
         </Link>
       </div>
     </form>
+  );
+}
+
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" loading={pending}>
+      {label}
+    </Button>
   );
 }
