@@ -105,8 +105,13 @@ export default function OnboardingPage() {
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    // Give Supabase a moment to propagate before we redirect.
+    // The middleware will run on /dashboard and query the new profile;
+    // without this brief delay there's a race where it doesn't see the row yet.
+    await new Promise((r) => setTimeout(r, 300));
+
+    // Use a hard navigation to fully refresh the auth/session state.
+    window.location.href = "/dashboard";
   }
 
   if (checkingAuth) {
