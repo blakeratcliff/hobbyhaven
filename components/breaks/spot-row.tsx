@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { TeamBadge } from "@/components/breaks/team-badge";
 import { CustomerPicker } from "@/components/breaks/customer-picker";
-import { updateSpot, unassignSpot } from "@/lib/actions/spots";
+import { updateSpot, unassignSpot, removeSpotFromBreak } from "@/lib/actions/spots";
 import { formatCurrency, cn } from "@/lib/utils";
 
 type Team = {
@@ -109,6 +109,16 @@ export function SpotRow({ spot, breakId }: Props) {
         setShipped(false);
         setTrackingNumber("");
         setExpanded(false);
+      }
+    });
+  }
+
+  function removeSpot() {
+    setError(null);
+    startTransition(async () => {
+      const result = await removeSpotFromBreak(spot.id, breakId);
+      if (!result.ok) {
+        setError(result.message || "Failed to remove");
       }
     });
   }
@@ -323,7 +333,7 @@ export function SpotRow({ spot, breakId }: Props) {
             >
               Cancel
             </Button>
-            {isSold && (
+            {isSold ? (
               <Button
                 type="button"
                 variant="ghost"
@@ -333,6 +343,17 @@ export function SpotRow({ spot, breakId }: Props) {
               >
                 <X className="h-4 w-4" />
                 Clear spot
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={removeSpot}
+                disabled={pending}
+                className="ml-auto text-red-700 hover:text-red-800"
+              >
+                <X className="h-4 w-4" />
+                Delete spot
               </Button>
             )}
           </div>

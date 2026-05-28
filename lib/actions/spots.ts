@@ -186,6 +186,97 @@ export async function updateBreakStatus(
 }
 
 // ============================================================
+// ADD SPOT to an existing break
+// ============================================================
+export async function addSpotToBreak(
+  breakId: string,
+  teamIds: string[] = []
+): Promise<ActionResult> {
+  const { supabase } = await requireOrgId();
+
+  // Get the current max spot number for this break
+  const { data: existing } = await supabase
+    .from("break_spots")
+    .select("spot_number")
+    .eq("break_id", breakId)
+    .order("spot_number", { ascending: false })
+    .limit(1);
+
+  const nextNumber =
+    existing && existing.length > 0
+      ? (existing[0] as { spot_number: number }).spot_number + 1
+      : 1;
+
+  const { data: newSpot, error: insertError } = await supabase
+    .from("break_spots")
+    .insert({
+      break_id: breakId,
+      spot_number: nextNumber,
+    })
+    .select("id")
+    .single();
+
+  if (insertError || !newSpot) {
+    return { ok: false, message: insertError?.message || "Failed to add spot" };
+  }
+
+  if (teamIds.length > 0) {
+    const rows = teamIds.map((teamId) => ({
+      break_spot_id: newSpot.id,
+      team_id: teamId,
+    }));
+    const { error: teamsError } = await supabase
+      .from("break_spot_teams")
+      .insert(rows);
+    if (teamsError) {
+      return { ok: false, message: `Team assignment failed: ${teamsError.message}` };
+    }
+  }
+
+  revalidatePath(`/breaks/${breakId}`);
+  return { ok: true };
+}
+
+// ============================================================
+// REMOVE SPOT (only if unsold)
+// ============================================================
+export async function removeSpotFromBreak(
+  spotId: string,
+  breakId: string
+): Promise<ActionResult> {
+  const { supabase } = await requireOrgId();
+
+  // Sanity check: only allow removal if the spot is unsold
+  const { data: spot } = await supabase
+    .from("break_spots")
+    .select("customer_id")
+    .eq("id", spotId)
+    .maybeSingle<{ customer_id: string | null }>();
+
+  if (!spot) {
+    return { ok: false, message: "Spot not found" };
+  }
+  if (spot.customer_id) {
+    return {
+      ok: false,
+      message: "Can't delete a sold spot. Clear the customer first.",
+    };
+  }
+
+  const { error } = await supabase
+    .from("break_spots")
+    .delete()
+    .eq("id", spotId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidatePath(`/breaks/${breakId}`);
+  return { ok: true };
+}
+
+// ============================================================
 // QUICK CUSTOMER CREATE
 // Used when assigning a spot to someone who doesn't exist yet.
 // Returns the new customer's id so the caller can immediately use it.

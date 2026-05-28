@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
 import { DeleteBreakButton } from "@/components/breaks/delete-break-button";
 import { SpotRow } from "@/components/breaks/spot-row";
+import { AddSpotControl } from "@/components/breaks/add-spot-control";
 import { BreakStatusChanger, BulkActionsToolbar } from "@/components/breaks/break-toolbar";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
 import { SPORT_LABELS, type SportKey } from "@/lib/constants";
@@ -147,6 +148,34 @@ export default async function BreakDetailPage({
     breakRow.total_product_cost - (pnl?.total_revenue || 0);
   const hasSoldSpots = (pnl?.sold_spots || 0) > 0;
 
+  // Flat break-even per spot (cost / total spots)
+  const flatBreakEvenPerSpot =
+    spotList.length > 0 ? breakRow.total_product_cost / spotList.length : 0;
+
+  // Remaining-spot break-even: how much each UNSOLD spot needs to average to break even
+  const unsoldSpotCount = spotList.length - (pnl?.sold_spots || 0);
+  const avgUnsoldNeeded =
+    unsoldSpotCount > 0 && breakEvenRemaining > 0
+      ? breakEvenRemaining / unsoldSpotCount
+      : 0;
+
+  // Fetch all teams for the break's sport+league for the AddSpotControl
+  const { data: allTeams } = await supabase
+    .from("teams")
+    .select("id, name, abbreviation, primary_color, text_color")
+    .eq("sport", breakRow.sport)
+    .eq("league", breakRow.league || "")
+    .order("name");
+
+  // Filter out teams already assigned to any spot in this break
+  const assignedTeamIds = new Set<string>();
+  for (const teams of teamsBySpot.values()) {
+    for (const t of teams) assignedTeamIds.add(t.id);
+  }
+  const availableTeams = ((allTeams as Team[] | null) || []).filter(
+    (t) => !assignedTeamIds.has(t.id)
+  );
+
   return (
     <div className="container-app py-10 max-w-4xl">
       <Link
@@ -219,6 +248,16 @@ export default async function BreakDetailPage({
             >
               {formatCurrency(Math.abs(breakEvenRemaining))}
             </p>
+            {avgUnsoldNeeded > 0 && (
+              <p className="text-xs text-ink-subtle mt-1">
+                {formatCurrency(avgUnsoldNeeded)} avg / unsold spot
+              </p>
+            )}
+            {breakEvenRemaining <= 0 && (
+              <p className="text-xs text-ink-subtle mt-1">
+                Every additional sale is profit
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -243,10 +282,17 @@ export default async function BreakDetailPage({
       {/* Spots */}
       <Card className="mb-6">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-            <h2 className="font-serif text-xl text-navy-900">
-              Spots ({spotList.length})
-            </h2>
+          <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+            <div>
+              <h2 className="font-serif text-xl text-navy-900">
+                Spots ({spotList.length})
+              </h2>
+              {flatBreakEvenPerSpot > 0 && (
+                <p className="text-xs text-ink-muted mt-0.5">
+                  Flat break-even: {formatCurrency(flatBreakEvenPerSpot)} per spot
+                </p>
+              )}
+            </div>
             <BulkActionsToolbar
               breakId={breakRow.id}
               hasSoldSpots={hasSoldSpots}
@@ -255,7 +301,7 @@ export default async function BreakDetailPage({
           {spotList.length === 0 ? (
             <p className="text-sm text-ink-muted">No spots in this break.</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 mb-4">
               {spotList.map((spot) => (
                 <SpotRow
                   key={spot.id}
@@ -281,6 +327,10 @@ export default async function BreakDetailPage({
               ))}
             </div>
           )}
+          <AddSpotControl
+            breakId={breakRow.id}
+            availableTeams={availableTeams}
+          />
         </CardContent>
       </Card>
 
