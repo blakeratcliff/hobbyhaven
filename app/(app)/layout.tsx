@@ -78,6 +78,12 @@ export default async function AppLayout({
               >
                 Customers
               </Link>
+              <Link
+                href="/analytics"
+                className="text-ink-muted hover:text-navy-900 transition-colors"
+              >
+                Analytics
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-3">
