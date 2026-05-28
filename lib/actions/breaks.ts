@@ -8,18 +8,20 @@ import { createClient } from "@/lib/supabase/server";
 // ============================================================
 // Validation
 // ============================================================
-const breakCreateSchema = z.object({
+const productSchema = z.object({
   product_name: z.string().trim().min(1, "Product name is required").max(200),
-  product_year: z
-    .union([z.number().int().min(1980).max(2100), z.literal(null)])
-    .optional()
-    .nullable(),
+  product_year: z.number().int().min(1980).max(2100).nullable(),
+  box_cost: z.number().min(0).nullable(),
+  box_count: z.number().int().min(1).default(1),
+  line_total: z.number().min(0).default(0),
+});
+
+const breakCreateSchema = z.object({
+  products: z.array(productSchema).min(1, "Add at least one product"),
   sport: z.enum(["baseball", "basketball", "football", "hockey", "soccer"]),
   league: z.string().trim().max(50).optional().nullable(),
   format: z.enum(["random_team", "pyt"]),
   spots_per_buyer: z.number().int().min(1).max(50).default(1),
-  box_cost: z.number().min(0).optional().nullable(),
-  box_count: z.number().int().min(1).default(1),
   total_product_cost: z.number().min(0).default(0),
   break_date: z.string().optional().nullable(),
   notes: z.string().max(2000).optional().or(z.literal("")),
@@ -79,6 +81,58 @@ function parseSpotAssignments(
 }
 
 // ============================================================
+// Parse products from FormData
+// Expected format:
+//   product_count = total number of products
+//   product_<i>_name, product_<i>_year, product_<i>_box_cost, product_<i>_box_count
+// Returns parsed products with computed line totals.
+// ============================================================
+function parseProducts(formData: FormData): {
+  product_name: string;
+  product_year: number | null;
+  box_cost: number | null;
+  box_count: number;
+  line_total: number;
+}[] {
+  const count = parseInt(formData.get("product_count") as string, 10) || 0;
+  const products: {
+    product_name: string;
+    product_year: number | null;
+    box_cost: number | null;
+    box_count: number;
+    line_total: number;
+  }[] = [];
+
+  const numOrNull = (v: FormDataEntryValue | null): number | null => {
+    if (typeof v !== "string" || v.trim() === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const intOrDefault = (v: FormDataEntryValue | null, def: number): number => {
+    if (typeof v !== "string" || v.trim() === "") return def;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : def;
+  };
+
+  for (let i = 0; i < count; i++) {
+    const name = formData.get(`product_${i}_name`);
+    if (typeof name !== "string" || !name.trim()) continue;
+    const boxCost = numOrNull(formData.get(`product_${i}_box_cost`));
+    const boxCount = intOrDefault(formData.get(`product_${i}_box_count`), 1);
+    const lineTotal = boxCost !== null ? +(boxCost * boxCount).toFixed(2) : 0;
+    products.push({
+      product_name: name.trim(),
+      product_year: numOrNull(formData.get(`product_${i}_year`)),
+      box_cost: boxCost,
+      box_count: boxCount,
+      line_total: lineTotal,
+    });
+  }
+
+  return products;
+}
+
+// ============================================================
 // CREATE
 // ============================================================
 export async function createBreak(
@@ -94,13 +148,6 @@ export async function createBreak(
     }
   }
 
-  // Numeric coercion helpers
-  const parseNumOrNull = (key: string): number | null => {
-    const v = formData.get(key);
-    if (typeof v !== "string" || v.trim() === "") return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
   const parseIntOrDefault = (key: string, def: number): number => {
     const v = formData.get(key);
     if (typeof v !== "string" || v.trim() === "") return def;
@@ -108,21 +155,18 @@ export async function createBreak(
     return Number.isFinite(n) ? n : def;
   };
 
-  const boxCost = parseNumOrNull("box_cost");
-  const boxCount = parseIntOrDefault("box_count", 1);
-  const computedProductCost =
-    boxCost !== null ? +(boxCost * boxCount).toFixed(2) : 0;
+  const products = parseProducts(formData);
+  const totalProductCost = +products
+    .reduce((sum, p) => sum + p.line_total, 0)
+    .toFixed(2);
 
   const parsed = breakCreateSchema.safeParse({
-    product_name: formData.get("product_name"),
-    product_year: parseNumOrNull("product_year"),
+    products,
     sport: formData.get("sport"),
     league: formData.get("league") || null,
     format: formData.get("format"),
     spots_per_buyer: parseIntOrDefault("spots_per_buyer", 1),
-    box_cost: boxCost,
-    box_count: boxCount,
-    total_product_cost: computedProductCost,
+    total_product_cost: totalProductCost,
     break_date: formData.get("break_date") || null,
     notes: formData.get("notes") || "",
     team_ids: Array.from(allTeamIds),
@@ -138,19 +182,23 @@ export async function createBreak(
 
   const { supabase, orgId } = await requireOrgId();
 
+  // Use the first product for the legacy columns on `breaks`
+  // (kept for backward compat and for the break_pnl view / list display).
+  const firstProduct = parsed.data.products[0];
+
   // Insert the break
   const { data: breakRow, error: breakError } = await supabase
     .from("breaks")
     .insert({
       org_id: orgId,
-      product_name: parsed.data.product_name,
-      product_year: parsed.data.product_year,
+      product_name: firstProduct.product_name,
+      product_year: firstProduct.product_year,
       sport: parsed.data.sport,
       league: parsed.data.league,
       format: parsed.data.format,
       spots_per_buyer: parsed.data.spots_per_buyer,
-      box_cost: parsed.data.box_cost,
-      box_count: parsed.data.box_count,
+      box_cost: firstProduct.box_cost,
+      box_count: firstProduct.box_count,
       total_product_cost: parsed.data.total_product_cost,
       break_date: parsed.data.break_date || null,
       notes: parsed.data.notes || null,
@@ -161,6 +209,23 @@ export async function createBreak(
 
   if (breakError || !breakRow) {
     return { ok: false, message: breakError?.message || "Failed to create" };
+  }
+
+  // Insert all products into break_products
+  const productRows = parsed.data.products.map((p, idx) => ({
+    break_id: breakRow.id,
+    position: idx,
+    product_name: p.product_name,
+    product_year: p.product_year,
+    box_cost: p.box_cost,
+    box_count: p.box_count,
+    line_total: p.line_total,
+  }));
+  const { error: productsError } = await supabase
+    .from("break_products")
+    .insert(productRows);
+  if (productsError) {
+    return { ok: false, message: `Products failed: ${productsError.message}` };
   }
 
   // Insert spots with their team mappings
@@ -210,14 +275,8 @@ export async function createBreak(
 // UPDATE BREAK (product info, costs, notes, date)
 // ============================================================
 const breakUpdateSchema = z.object({
-  product_name: z.string().trim().min(1, "Product name is required").max(200),
-  product_year: z
-    .union([z.number().int().min(1980).max(2100), z.literal(null)])
-    .optional()
-    .nullable(),
+  products: z.array(productSchema).min(1, "Add at least one product"),
   format: z.enum(["random_team", "pyt"]),
-  box_cost: z.number().min(0).optional().nullable(),
-  box_count: z.number().int().min(1).default(1),
   total_product_cost: z.number().min(0).default(0),
   break_date: z.string().optional().nullable(),
   notes: z.string().max(2000).optional().or(z.literal("")),
@@ -228,31 +287,15 @@ export async function updateBreak(
   _prevState: ActionResult,
   formData: FormData
 ): Promise<ActionResult> {
-  const parseNumOrNull = (key: string): number | null => {
-    const v = formData.get(key);
-    if (typeof v !== "string" || v.trim() === "") return null;
-    const n = Number(v);
-    return Number.isFinite(n) ? n : null;
-  };
-  const parseIntOrDefault = (key: string, def: number): number => {
-    const v = formData.get(key);
-    if (typeof v !== "string" || v.trim() === "") return def;
-    const n = parseInt(v, 10);
-    return Number.isFinite(n) ? n : def;
-  };
-
-  const boxCost = parseNumOrNull("box_cost");
-  const boxCount = parseIntOrDefault("box_count", 1);
-  const computedProductCost =
-    boxCost !== null ? +(boxCost * boxCount).toFixed(2) : 0;
+  const products = parseProducts(formData);
+  const totalProductCost = +products
+    .reduce((sum, p) => sum + p.line_total, 0)
+    .toFixed(2);
 
   const parsed = breakUpdateSchema.safeParse({
-    product_name: formData.get("product_name"),
-    product_year: parseNumOrNull("product_year"),
+    products,
     format: formData.get("format"),
-    box_cost: boxCost,
-    box_count: boxCount,
-    total_product_cost: computedProductCost,
+    total_product_cost: totalProductCost,
     break_date: formData.get("break_date") || null,
     notes: formData.get("notes") || "",
   });
@@ -267,14 +310,16 @@ export async function updateBreak(
 
   const { supabase } = await requireOrgId();
 
+  const firstProduct = parsed.data.products[0];
+
   const { error } = await supabase
     .from("breaks")
     .update({
-      product_name: parsed.data.product_name,
-      product_year: parsed.data.product_year,
+      product_name: firstProduct.product_name,
+      product_year: firstProduct.product_year,
       format: parsed.data.format,
-      box_cost: parsed.data.box_cost,
-      box_count: parsed.data.box_count,
+      box_cost: firstProduct.box_cost,
+      box_count: firstProduct.box_count,
       total_product_cost: parsed.data.total_product_cost,
       break_date: parsed.data.break_date || null,
       notes: parsed.data.notes || null,
@@ -283,6 +328,24 @@ export async function updateBreak(
 
   if (error) {
     return { ok: false, message: error.message };
+  }
+
+  // Replace products: delete existing, insert new. Simple and correct.
+  await supabase.from("break_products").delete().eq("break_id", breakId);
+  const productRows = parsed.data.products.map((p, idx) => ({
+    break_id: breakId,
+    position: idx,
+    product_name: p.product_name,
+    product_year: p.product_year,
+    box_cost: p.box_cost,
+    box_count: p.box_count,
+    line_total: p.line_total,
+  }));
+  const { error: productsError } = await supabase
+    .from("break_products")
+    .insert(productRows);
+  if (productsError) {
+    return { ok: false, message: `Products failed: ${productsError.message}` };
   }
 
   revalidatePath(`/breaks/${breakId}`);

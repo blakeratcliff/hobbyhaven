@@ -92,6 +92,23 @@ export default async function BreakDetailPage({
     notFound();
   }
 
+  // Load products for this break
+  const { data: productRows } = await supabase
+    .from("break_products")
+    .select("id, product_name, product_year, box_cost, box_count, line_total, position")
+    .eq("break_id", params.id)
+    .order("position");
+  type ProductRow = {
+    id: string;
+    product_name: string;
+    product_year: number | null;
+    box_cost: number | null;
+    box_count: number;
+    line_total: number;
+    position: number;
+  };
+  const products = (productRows as ProductRow[] | null) || [];
+
   const { data: spots } = await supabase
     .from("break_spots")
     .select(
@@ -243,8 +260,22 @@ export default async function BreakDetailPage({
       <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl text-navy-900 mb-1">
-            {breakRow.product_year ? `${breakRow.product_year} ` : ""}
-            {breakRow.product_name}
+            {products.length > 0 ? (
+              <>
+                {products[0].product_year ? `${products[0].product_year} ` : ""}
+                {products[0].product_name}
+                {products.length > 1 && (
+                  <span className="text-ink-muted">
+                    {" "}and {products.length - 1} more
+                  </span>
+                )}
+              </>
+            ) : (
+              <>
+                {breakRow.product_year ? `${breakRow.product_year} ` : ""}
+                {breakRow.product_name}
+              </>
+            )}
           </h1>
           <p className="text-sm text-ink-muted">
             {SPORT_LABELS[breakRow.sport]}
@@ -275,10 +306,17 @@ export default async function BreakDetailPage({
             <p className="font-serif text-2xl text-navy-900 tabular-nums">
               {formatCurrency(breakRow.total_product_cost)}
             </p>
-            {breakRow.box_cost !== null && breakRow.box_count > 1 && (
+            {products.length > 1 ? (
               <p className="text-xs text-ink-subtle mt-1">
-                {formatCurrency(breakRow.box_cost)} × {breakRow.box_count}
+                {products.length} products
               </p>
+            ) : (
+              breakRow.box_cost !== null &&
+              breakRow.box_count > 1 && (
+                <p className="text-xs text-ink-subtle mt-1">
+                  {formatCurrency(breakRow.box_cost)} × {breakRow.box_count}
+                </p>
+              )
             )}
           </CardContent>
         </Card>
@@ -338,6 +376,41 @@ export default async function BreakDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Products breakdown (only for mixers) */}
+      {products.length > 1 && (
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <h2 className="font-serif text-xl text-navy-900 mb-4">
+              Products ({products.length})
+            </h2>
+            <div className="space-y-2">
+              {products.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between p-3 rounded-md border border-cream-200"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-navy-900">
+                      {p.product_year ? `${p.product_year} ` : ""}
+                      {p.product_name}
+                    </p>
+                    {p.box_cost !== null && (
+                      <p className="text-xs text-ink-subtle">
+                        {formatCurrency(p.box_cost)} × {p.box_count}{" "}
+                        {p.box_count === 1 ? "box" : "boxes"}
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-navy-900 tabular-nums">
+                    {formatCurrency(p.line_total)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Spots */}
       <Card className="mb-6">

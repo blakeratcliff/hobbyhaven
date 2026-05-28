@@ -7,13 +7,17 @@ import { BreakEditForm } from "@/components/breaks/break-edit-form";
 
 type BreakRow = {
   id: string;
-  product_name: string;
-  product_year: number | null;
   format: "random_team" | "pyt";
-  box_cost: number | null;
-  box_count: number;
   break_date: string | null;
   notes: string | null;
+};
+
+type ProductRow = {
+  product_name: string;
+  product_year: number | null;
+  box_cost: number | null;
+  box_count: number;
+  position: number;
 };
 
 export default async function EditBreakPage({
@@ -25,15 +29,26 @@ export default async function EditBreakPage({
 
   const { data: breakRow } = await supabase
     .from("breaks")
-    .select(
-      "id, product_name, product_year, format, box_cost, box_count, break_date, notes"
-    )
+    .select("id, format, break_date, notes")
     .eq("id", params.id)
     .maybeSingle<BreakRow>();
 
   if (!breakRow) {
     notFound();
   }
+
+  const { data: productRows } = await supabase
+    .from("break_products")
+    .select("product_name, product_year, box_cost, box_count, position")
+    .eq("break_id", params.id)
+    .order("position");
+
+  const products = ((productRows as ProductRow[] | null) || []).map((p) => ({
+    product_name: p.product_name,
+    product_year: p.product_year?.toString() || "",
+    box_cost: p.box_cost?.toString() || "",
+    box_count: p.box_count?.toString() || "1",
+  }));
 
   return (
     <div className="container-app py-10 max-w-3xl">
@@ -53,13 +68,13 @@ export default async function EditBreakPage({
           <BreakEditForm
             breakId={breakRow.id}
             initialData={{
-              product_name: breakRow.product_name,
-              product_year: breakRow.product_year,
               format: breakRow.format,
-              box_cost: breakRow.box_cost,
-              box_count: breakRow.box_count,
               break_date: breakRow.break_date,
               notes: breakRow.notes,
+              products:
+                products.length > 0
+                  ? products
+                  : [{ product_name: "", product_year: "", box_cost: "", box_count: "1" }],
             }}
           />
         </CardContent>

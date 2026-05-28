@@ -55,6 +55,7 @@ export default async function BreaksPage() {
   // Pull P&L stats for each break
   const breakIds = breakList.map((b) => b.id);
   let pnlMap: Record<string, PnlRow> = {};
+  let productCountMap: Record<string, number> = {};
   if (breakIds.length > 0) {
     const { data: pnl } = await supabase
       .from("break_pnl")
@@ -68,6 +69,15 @@ export default async function BreaksPage() {
       },
       {} as Record<string, PnlRow>
     );
+
+    // Count products per break
+    const { data: prods } = await supabase
+      .from("break_products")
+      .select("break_id")
+      .in("break_id", breakIds);
+    for (const row of (prods as { break_id: string }[] | null) || []) {
+      productCountMap[row.break_id] = (productCountMap[row.break_id] || 0) + 1;
+    }
   }
 
   return (
@@ -140,6 +150,11 @@ export default async function BreaksPage() {
                       >
                         {b.product_year ? `${b.product_year} ` : ""}
                         {b.product_name}
+                        {(productCountMap[b.id] || 1) > 1 && (
+                          <span className="text-ink-subtle font-normal">
+                            {" "}and {(productCountMap[b.id] || 1) - 1} more
+                          </span>
+                        )}
                       </Link>
                       <p className="text-xs text-ink-subtle mt-0.5">
                         {SPORT_LABELS[b.sport]}

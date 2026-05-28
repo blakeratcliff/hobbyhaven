@@ -19,6 +19,7 @@ import {
   type SportKey,
 } from "@/lib/constants";
 import { createBreak, type ActionResult } from "@/lib/actions/breaks";
+import { ProductsFieldArray } from "@/components/breaks/products-field-array";
 
 type Team = {
   id: string;
@@ -155,37 +156,33 @@ export function BreakForm({ teams }: { teams: Team[] }) {
       )}
 
       {/* ============================================================
-          Section 1: Product info
+          Section 1: Products
           ============================================================ */}
       <section className="space-y-4">
         <div>
-          <h2 className="font-serif text-xl text-navy-900">Product</h2>
+          <h2 className="font-serif text-xl text-navy-900">Products</h2>
           <p className="text-sm text-ink-muted">
-            What are you breaking?
+            What are you breaking? Add multiple products for a mixer.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="product_name">Product name</Label>
-            <Input
-              id="product_name"
-              name="product_name"
-              required
-              placeholder="2025 Topps Chrome"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="product_year">Year</Label>
-            <Input
-              id="product_year"
-              name="product_year"
-              type="number"
-              placeholder="2025"
-              min="1980"
-              max="2100"
-            />
-          </div>
+        <ProductsFieldArray />
+        {state.fieldErrors?.products && (
+          <Alert variant="error">{state.fieldErrors.products[0]}</Alert>
+        )}
+      </section>
+
+      <div className="gold-divider" />
+
+      {/* ============================================================
+          Section 2: Sport / League
+          ============================================================ */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="font-serif text-xl text-navy-900">Sport &amp; league</h2>
+          <p className="text-sm text-ink-muted">
+            All products in this break share the same teams.
+          </p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -219,53 +216,6 @@ export function BreakForm({ teams }: { teams: Team[] }) {
                 </option>
               ))}
             </Select>
-          </div>
-        </div>
-      </section>
-
-      <div className="gold-divider" />
-
-      {/* ============================================================
-          Section 2: Cost
-          ============================================================ */}
-      <section className="space-y-4">
-        <div>
-          <h2 className="font-serif text-xl text-navy-900">Cost</h2>
-          <p className="text-sm text-ink-muted">
-            We&apos;ll use this to calculate break-even.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="box_cost">Box cost</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle text-sm">
-                $
-              </span>
-              <Input
-                id="box_cost"
-                name="box_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                className="pl-7"
-              />
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="box_count">Number of boxes</Label>
-            <Input
-              id="box_count"
-              name="box_count"
-              type="number"
-              min="1"
-              defaultValue="1"
-            />
-            <p className="text-xs text-ink-subtle">
-              For case breaks, enter the total boxes.
-            </p>
           </div>
         </div>
       </section>
