@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { DeleteBreakButton } from "@/components/breaks/delete-break-button";
 import { SpotRow } from "@/components/breaks/spot-row";
+import { SpotViewToggle } from "@/components/breaks/spot-view-toggle";
 import { AddSpotControl } from "@/components/breaks/add-spot-control";
 import { BreakStatusChanger, BulkActionsToolbar } from "@/components/breaks/break-toolbar";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -176,6 +178,58 @@ export default async function BreakDetailPage({
     (t) => !assignedTeamIds.has(t.id)
   );
 
+  // Build customer-grouped view data
+  type CustomerGroup = {
+    customer_id: string;
+    customer_name: string;
+    spot_count: number;
+    total_spend: number;
+    all_paid: boolean;
+    all_shipped: boolean;
+    spots: {
+      id: string;
+      spot_number: number;
+      price: number | null;
+      payment_received: boolean;
+      shipped: boolean;
+      teams: Team[];
+    }[];
+  };
+
+  const customerGroupMap = new Map<string, CustomerGroup>();
+  for (const spot of spotList) {
+    if (!spot.customer_id) continue;
+    const customerName = customerNamesById.get(spot.customer_id) || "Unknown";
+    if (!customerGroupMap.has(spot.customer_id)) {
+      customerGroupMap.set(spot.customer_id, {
+        customer_id: spot.customer_id,
+        customer_name: customerName,
+        spot_count: 0,
+        total_spend: 0,
+        all_paid: true,
+        all_shipped: true,
+        spots: [],
+      });
+    }
+    const g = customerGroupMap.get(spot.customer_id)!;
+    g.spot_count += 1;
+    g.total_spend += spot.price || 0;
+    if (!spot.payment_received) g.all_paid = false;
+    if (!spot.shipped) g.all_shipped = false;
+    g.spots.push({
+      id: spot.id,
+      spot_number: spot.spot_number,
+      price: spot.price,
+      payment_received: spot.payment_received,
+      shipped: spot.shipped,
+      teams: teamsBySpot.get(spot.id) || [],
+    });
+  }
+
+  const customerGroups = Array.from(customerGroupMap.values()).sort(
+    (a, b) => b.total_spend - a.total_spend
+  );
+
   return (
     <div className="container-app py-10 max-w-4xl">
       <Link
@@ -201,6 +255,12 @@ export default async function BreakDetailPage({
         </div>
         <div className="flex items-center gap-3">
           <BreakStatusChanger breakId={breakRow.id} currentStatus={breakRow.status} />
+          <Link href={`/breaks/${breakRow.id}/edit`}>
+            <Button variant="secondary" size="sm">
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
           <DeleteBreakButton breakId={breakRow.id} />
         </div>
       </div>
@@ -301,36 +361,43 @@ export default async function BreakDetailPage({
           {spotList.length === 0 ? (
             <p className="text-sm text-ink-muted">No spots in this break.</p>
           ) : (
-            <div className="space-y-2 mb-4">
-              {spotList.map((spot) => (
-                <SpotRow
-                  key={spot.id}
-                  breakId={breakRow.id}
-                  spot={{
-                    id: spot.id,
-                    spot_number: spot.spot_number,
-                    customer_id: spot.customer_id,
-                    customer_name: spot.customer_id
-                      ? customerNamesById.get(spot.customer_id) || null
-                      : null,
-                    price: spot.price,
-                    shipping_cost: spot.shipping_cost,
-                    supplies_cost: spot.supplies_cost,
-                    fees_cost: spot.fees_cost,
-                    payment_received: spot.payment_received,
-                    shipped: spot.shipped,
-                    tracking_number: spot.tracking_number,
-                    notes: spot.notes,
-                    teams: teamsBySpot.get(spot.id) || [],
-                  }}
-                />
-              ))}
-            </div>
+            <SpotViewToggle
+              customerGroups={customerGroups}
+              spotView={
+                <div className="space-y-2">
+                  {spotList.map((spot) => (
+                    <SpotRow
+                      key={spot.id}
+                      breakId={breakRow.id}
+                      spot={{
+                        id: spot.id,
+                        spot_number: spot.spot_number,
+                        customer_id: spot.customer_id,
+                        customer_name: spot.customer_id
+                          ? customerNamesById.get(spot.customer_id) || null
+                          : null,
+                        price: spot.price,
+                        shipping_cost: spot.shipping_cost,
+                        supplies_cost: spot.supplies_cost,
+                        fees_cost: spot.fees_cost,
+                        payment_received: spot.payment_received,
+                        shipped: spot.shipped,
+                        tracking_number: spot.tracking_number,
+                        notes: spot.notes,
+                        teams: teamsBySpot.get(spot.id) || [],
+                      }}
+                    />
+                  ))}
+                </div>
+              }
+            />
           )}
-          <AddSpotControl
-            breakId={breakRow.id}
-            availableTeams={availableTeams}
-          />
+          <div className="mt-4">
+            <AddSpotControl
+              breakId={breakRow.id}
+              availableTeams={availableTeams}
+            />
+          </div>
         </CardContent>
       </Card>
 

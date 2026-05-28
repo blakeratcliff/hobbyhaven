@@ -207,6 +207,90 @@ export async function createBreak(
 }
 
 // ============================================================
+// UPDATE BREAK (product info, costs, notes, date)
+// ============================================================
+const breakUpdateSchema = z.object({
+  product_name: z.string().trim().min(1, "Product name is required").max(200),
+  product_year: z
+    .union([z.number().int().min(1980).max(2100), z.literal(null)])
+    .optional()
+    .nullable(),
+  format: z.enum(["random_team", "pyt"]),
+  box_cost: z.number().min(0).optional().nullable(),
+  box_count: z.number().int().min(1).default(1),
+  total_product_cost: z.number().min(0).default(0),
+  break_date: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional().or(z.literal("")),
+});
+
+export async function updateBreak(
+  breakId: string,
+  _prevState: ActionResult,
+  formData: FormData
+): Promise<ActionResult> {
+  const parseNumOrNull = (key: string): number | null => {
+    const v = formData.get(key);
+    if (typeof v !== "string" || v.trim() === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const parseIntOrDefault = (key: string, def: number): number => {
+    const v = formData.get(key);
+    if (typeof v !== "string" || v.trim() === "") return def;
+    const n = parseInt(v, 10);
+    return Number.isFinite(n) ? n : def;
+  };
+
+  const boxCost = parseNumOrNull("box_cost");
+  const boxCount = parseIntOrDefault("box_count", 1);
+  const computedProductCost =
+    boxCost !== null ? +(boxCost * boxCount).toFixed(2) : 0;
+
+  const parsed = breakUpdateSchema.safeParse({
+    product_name: formData.get("product_name"),
+    product_year: parseNumOrNull("product_year"),
+    format: formData.get("format"),
+    box_cost: boxCost,
+    box_count: boxCount,
+    total_product_cost: computedProductCost,
+    break_date: formData.get("break_date") || null,
+    notes: formData.get("notes") || "",
+  });
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: "Please fix the errors below.",
+      fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
+    };
+  }
+
+  const { supabase } = await requireOrgId();
+
+  const { error } = await supabase
+    .from("breaks")
+    .update({
+      product_name: parsed.data.product_name,
+      product_year: parsed.data.product_year,
+      format: parsed.data.format,
+      box_cost: parsed.data.box_cost,
+      box_count: parsed.data.box_count,
+      total_product_cost: parsed.data.total_product_cost,
+      break_date: parsed.data.break_date || null,
+      notes: parsed.data.notes || null,
+    })
+    .eq("id", breakId);
+
+  if (error) {
+    return { ok: false, message: error.message };
+  }
+
+  revalidatePath(`/breaks/${breakId}`);
+  revalidatePath("/breaks");
+  redirect(`/breaks/${breakId}`);
+}
+
+// ============================================================
 // DELETE
 // ============================================================
 export async function deleteBreak(breakId: string): Promise<ActionResult> {
