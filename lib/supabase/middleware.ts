@@ -1,6 +1,5 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { Database } from "@/types/database";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
@@ -26,7 +25,7 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabase = createServerClient<Database>(
+  const supabase = createServerClient(
     supabaseUrl,
     supabaseAnonKey,
     {
