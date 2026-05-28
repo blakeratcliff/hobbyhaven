@@ -87,7 +87,7 @@ export function ProductsFieldArray({
                 required
                 value={p.product_name}
                 onChange={(e) => update(idx, "product_name", e.target.value)}
-                placeholder="2025 Topps Chrome"
+                placeholder="Topps Chrome"
               />
             </div>
             <div className="space-y-1.5">

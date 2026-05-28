@@ -73,6 +73,19 @@ export default async function DashboardPage() {
     .limit(5);
   const breaks = (recentBreaks as RecentBreak[] | null) || [];
 
+  // Product counts per break (for "and N more")
+  const recentBreakIds = breaks.map((b) => b.id);
+  const productCountMap: Record<string, number> = {};
+  if (recentBreakIds.length > 0) {
+    const { data: prods } = await supabase
+      .from("break_products")
+      .select("break_id")
+      .in("break_id", recentBreakIds);
+    for (const row of (prods as { break_id: string }[] | null) || []) {
+      productCountMap[row.break_id] = (productCountMap[row.break_id] || 0) + 1;
+    }
+  }
+
   // Customer count
   const { count: customerCount } = await supabase
     .from("customers")
@@ -141,6 +154,11 @@ export default async function DashboardPage() {
                         <p className="text-navy-900 font-medium truncate">
                           {b.product_year ? `${b.product_year} ` : ""}
                           {b.product_name}
+                          {(productCountMap[b.id] || 1) > 1 && (
+                            <span className="text-ink-subtle font-normal">
+                              {" "}and {(productCountMap[b.id] || 1) - 1} more
+                            </span>
+                          )}
                         </p>
                         <p className="text-xs text-ink-subtle">
                           {SPORT_LABELS[b.sport]}
