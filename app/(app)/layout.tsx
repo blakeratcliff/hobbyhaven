@@ -84,6 +84,12 @@ export default async function AppLayout({
             <span className="hidden sm:block text-sm text-ink-muted">
               {org?.name}
             </span>
+            <Link
+              href="/settings"
+              className="text-sm text-ink-muted hover:text-navy-900 transition-colors"
+            >
+              Settings
+            </Link>
             <LogoutButton />
           </div>
         </div>

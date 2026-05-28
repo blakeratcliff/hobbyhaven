@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { CustomerRowActions } from "@/components/customers/customer-row-actions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 type CustomerRow = {
@@ -127,6 +128,9 @@ export default async function CustomersPage({
                 <th className="text-right text-xs font-medium uppercase tracking-wide text-ink-muted px-6 py-3 hidden md:table-cell">
                   Last purchase
                 </th>
+                <th className="px-6 py-3 w-1">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -135,7 +139,7 @@ export default async function CustomersPage({
                 return (
                   <tr
                     key={c.id}
-                    className="border-b border-cream-100 last:border-0 hover:bg-cream-50 transition-colors"
+                    className="group border-b border-cream-100 last:border-0 hover:bg-cream-50 transition-colors"
                   >
                     <td className="px-6 py-4">
                       <Link
@@ -153,6 +157,12 @@ export default async function CustomersPage({
                     </td>
                     <td className="px-6 py-4 text-right text-sm text-ink-muted hidden md:table-cell">
                       {formatDate(stats?.last_purchase_date)}
+                    </td>
+                    <td className="px-3 py-2 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                      <CustomerRowActions
+                        customerId={c.id}
+                        customerName={c.display_name}
+                      />
                     </td>
                   </tr>
                 );
