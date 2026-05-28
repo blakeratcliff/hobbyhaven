@@ -22,7 +22,7 @@ export default async function AppLayout({
     .from("profiles")
     .select("display_name, org_id")
     .eq("id", user.id)
-    .maybeSingle();
+    .maybeSingle<{ display_name: string | null; org_id: string }>();
 
   if (!profile) {
     redirect("/onboarding");
@@ -32,7 +32,7 @@ export default async function AppLayout({
     .from("organizations")
     .select("name, slug")
     .eq("id", profile.org_id)
-    .maybeSingle();
+    .maybeSingle<{ name: string; slug: string }>();
 
   return (
     <div className="min-h-screen flex flex-col">

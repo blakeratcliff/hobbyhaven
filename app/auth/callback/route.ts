@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
           .from("profiles")
           .select("id")
           .eq("id", userData.user.id)
-          .maybeSingle();
+          .maybeSingle<{ id: string }>();
 
         if (!profile) {
           return NextResponse.redirect(`${origin}/onboarding`);

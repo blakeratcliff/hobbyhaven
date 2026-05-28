@@ -42,7 +42,7 @@ export default function OnboardingPage() {
         .from("profiles")
         .select("id")
         .eq("id", userData.user.id)
-        .maybeSingle();
+        .maybeSingle<{ id: string }>();
 
       if (profile) {
         // Already onboarded → go to dashboard.

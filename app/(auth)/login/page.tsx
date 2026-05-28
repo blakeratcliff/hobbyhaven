@@ -50,7 +50,7 @@ export default function LoginPage() {
         .from("profiles")
         .select("id")
         .eq("id", userData.user.id)
-        .maybeSingle();
+        .maybeSingle<{ id: string }>();
 
       if (!profile) {
         router.push("/onboarding");
